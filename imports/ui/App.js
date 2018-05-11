@@ -9,53 +9,6 @@ import Account from './Account.js';
 import 'bootstrap/dist/css/bootstrap.css';
 import 'u2f-api-polyfill/u2f-api-polyfill.js';
 
-/// Registration
-
-// import u2f from 'u2f';
-//
-// const APP_ID = 'https://pc.alamp.ru';
-// const registrationRequest = u2f.request(APP_ID);
-// console.log(registrationRequest);
-// try {
-//     window.u2f.register(registrationRequest.appId, [registrationRequest], [], (registrationResponse) => {
-//         // Send this registration response to the registration verification server endpoint
-//         console.log(registrationResponse);
-//         Meteor.call('u2f.registrationVerificationHandler', registrationRequest, registrationResponse);
-//     });
-// } catch (e) {
-//     alert('Этот браузер не поддерживается. Какая жалость! :(')
-// }
-
-
-///
-
-if ( Meteor.userId() ) {
-    console.log('АВТОРИЗОВАН');
-} else {
-    const username = 'vipho';
-    Meteor.call('u2f.authenticationChallengeHandler', 'vipho', (error, req) => {
-        if (error) {
-            return 'Пиздец, ' + error;
-        }
-
-        try {
-            window.u2f.sign(req.appId, [req.challenge], [req], (res) => {
-                Accounts.callLoginMethod({
-                    methodArguments: [{
-                        u2f: true,
-                        res,
-                        username,
-                        req,
-                    }],
-                });
-            });
-        } catch (e) {
-            console.log(e);
-            alert('Этот браузер не поддерживается. Какая жалость! :(');
-        }
-    });
-}
-
 const fields = [
     'Url',
     'Nickname',
@@ -89,12 +42,57 @@ class App extends Component {
     }
 
     render() {
+        if (! this.props.user) {
+            Meteor.call('u2f.authenticationChallengeHandler', (error, result) => {
+                if (error) {
+                    return 'Пиздец, ' + error;
+                }
+
+                let req = result.req;
+
+                if (result.isRegistered) {
+                    try {
+                        window.u2f.sign(req.appId, [req.challenge], [req], (res) => {
+                            Accounts.callLoginMethod({
+                                methodArguments: [{
+                                    u2f: true,
+                                    res,
+                                    req,
+                                }],
+                            });
+                        });
+                    } catch (e) {
+                        console.log(e);
+                        alert('Этот браузер не поддерживается. Какая жалость! :(');
+                    }
+                } else {
+                    try {
+                        window.u2f.register(req.appId, [req], [], (res) => {
+                            Meteor.call('u2f.registrationVerificationHandler', req, res);
+                        });
+                    } catch (e) {
+                        console.log(e);
+                        alert('Этот браузер не поддерживается. Какая жалость! :(')
+                    }
+                }
+            });
+
+            return (
+                <div className="jumbotron jumbotron-fluid">
+                    <div className="container">
+                        <h1 className="display-4">You are not authenticated</h1>
+                        <p className="lead">Insert your Security Key and activate it.</p>
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div className="container-fluid">
 
                 <div className="row">
                     <div className="col">
-                        <h2 className="py-3">myAccount</h2>
+                        <h2 className="py-3">myAccount <button type="button" className="btn btn-light align-right" onClick={() => {Meteor.logout();}}>(Log out)</button></h2>
 
                         <table className="table">
                             <thead>
@@ -134,5 +132,6 @@ export default withTracker(() => {
 
     return {
         accounts: AccountsMongo.find({}, { sort: { Url: 1 } }).fetch(),
+        user: Meteor.userId(),
     };
 })(App);
