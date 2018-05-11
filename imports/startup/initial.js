@@ -11,3 +11,7 @@ Meteor.startup(() => {
         return false;
     });
 });
+
+Accounts.config({
+    loginExpirationInDays: 1,
+});
